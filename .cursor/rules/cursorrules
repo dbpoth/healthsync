@@ -1,0 +1,137 @@
+# HealthSync — Cursor Project Rules
+
+## What This Project Is
+HealthSync is a patient-first, longitudinal heart health intelligence system.
+It detects meaningful physiological drift over time and generates natural language insights.
+
+This is NOT:
+- A diagnosis tool
+- A medical replacement
+- A generic AI chatbot
+- An acute event detector (e.g. heart attack detection)
+
+It IS:
+- A personal baseline engine
+- A trend + drift detection system
+- An AI insight generator (narrative summaries from structured signals)
+- Eventually: a full preventive health intelligence platform
+
+---
+
+## Current Build Phase
+**Phase 1 — MVP (in progress)**
+
+Working on:
+- Apple Health XML parsing (Python)
+- Resting Heart Rate (RHR) daily aggregation + baseline modeling
+- 30-day rolling baseline + deviation detection
+- HRV (HeartRateVariabilitySDNN) as second signal (next up)
+- AI insight layer via Claude/OpenAI API (coming soon)
+- Simple web UI: upload XML → get insight (after core pipeline works)
+
+Not working on yet:
+- Live data sync / HealthKit integration
+- Mobile app
+- Multi-user support
+- Sleep, SpO2, or other signals (Phase 2+)
+
+---
+
+## Stack
+- **Language:** Python
+- **Data processing (so far):** pandas, numpy
+- **Notebooks:** Jupyter (.ipynb) for exploration, then refactor to .py modules
+- **Backend (coming):** FastAPI
+- **Frontend (coming):** React
+- **AI insight layer (coming):** Anthropic Claude API (claude-sonnet-4-20250514)
+- **Data source:** Apple Health XML export (export.xml)
+
+---
+
+## Project Structure
+```
+healthsync/
+    data/               # Raw Apple Health XML exports (gitignored)
+    notebooks/          # Exploratory Jupyter notebooks
+    src/
+        parser.py       # Apple Health XML parsing
+        baseline.py     # Baseline modeling + drift detection
+        insights.py     # AI insight generation (Claude API)
+        api.py          # FastAPI app (coming)
+    frontend/           # React app (coming)
+    README.md
+    .cursorrules
+```
+
+---
+
+## Data Details
+- **Source:** Apple Health XML export (`export.xml`)
+- **Primary signals (Phase 1):**
+  - `HKQuantityTypeIdentifierRestingHeartRate` — daily RHR values
+  - `HKQuantityTypeIdentifierHeartRateVariabilitySDNN` — HRV
+- **Phase 2 signals (later):**
+  - `HKQuantityTypeIdentifierRespiratoryRate`
+  - `HKQuantityTypeIdentifierOxygenSaturation`
+  - `HKQuantityTypeIdentifierActiveEnergyBurned`
+  - Walking gait metrics
+- **Current dataset:** ~3.5 months (Oct 2025 – Feb 2026), one person, daily Apple Watch wear (no sleep tracking)
+- **Known data quirks:** 3 missing days (left as NaN — do NOT forward fill unless asked), old data pre-2025 is excluded
+
+---
+
+## Core Logic (Already Built / In Progress)
+
+### Baseline Modeling
+- Aggregate raw RHR samples to daily mean
+- Compute 30-day rolling mean as personal baseline
+- Compute daily deviation = actual - baseline
+
+### Drift Detection
+- Look at last 14-day window
+- Compute mean deviation + linear slope over that window
+- Flag if mean deviation > threshold (currently ~3 bpm for RHR) and slope is positive
+
+### What's Been Validated
+- Real data shows a travel-induced spike of +10–14 bpm on Feb 13–14 (vacation)
+- Baseline correctly captures slow seasonal drift (Nov–Jan elevation, then recovery)
+- 3 missing days handled via NaN (pandas rolling handles naturally)
+
+---
+
+## Coding Principles
+- **Keep it simple first.** Don't over-engineer. Get it working, then refine.
+- **No unnecessary libraries.** Use pandas/numpy before reaching for sklearn or statsmodels unless clearly needed.
+- **Write modular functions.** Each logical step (parse, aggregate, baseline, detect, generate) should be its own clean function.
+- **Add brief comments** explaining *why*, not just what.
+- **Don't silently swallow errors.** Raise with clear messages, especially in the parser.
+- **Notebook-first for exploration, then refactor to src/.** Don't over-architect too early.
+- **Test on real data.** The Apple Health XML is messy — always handle edge cases (missing days, type mismatches, old data gaps).
+
+---
+
+## AI Insight Layer (Planned)
+When drift is detected, pass a structured summary to Claude API:
+- Signal name + current value
+- Baseline value
+- Deviation magnitude + direction
+- Slope over recent window
+- Any known context (travel, activity — eventually)
+
+Claude generates a short, plain-English health insight:
+- What changed
+- Likely contributors
+- What to do about it
+- Tone: calm, informative, not alarmist
+
+**Never pass raw data arrays to the AI.** Pre-compute the stats, pass clean structured summaries.
+
+---
+
+## What NOT to Do
+- Don't add diagnosis language ("you may have X condition")
+- Don't alert for single-day spikes — require sustained drift (multiple days)
+- Don't use public health datasets — this is built on real personal data
+- Don't add sleep analysis yet — no sleep data in current dataset
+- Don't build mobile app yet — web first
+- Don't add auth/multi-user yet — single user for MVP
