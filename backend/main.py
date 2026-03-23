@@ -204,6 +204,10 @@ async def analyze(file: UploadFile = File(...)):
 def health():
     return {"status": "ok"}
 
+# # Serve frontend
+# app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")
 
-# Serve frontend
-app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")
+# Serve frontend — works both locally and on Render
+import pathlib
+_frontend = pathlib.Path(__file__).parent.parent / "frontend"
+app.mount("/", StaticFiles(directory=str(_frontend), html=True), name="frontend")
