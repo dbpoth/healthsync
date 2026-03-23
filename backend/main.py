@@ -19,7 +19,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── pipeline (from your data_parse_exploration.ipynb) --
+# ── pipeline (from your notebook) ──────────────────────────────────────────
 
 def load_data(filepath):
     tree = ET.parse(filepath)
@@ -33,27 +33,30 @@ def load_data(filepath):
             'value': record.get('value'),
         })
     df = pd.DataFrame(records)
-    df['startDate'] = pd.to_datetime(df['startDate'])
-    df['endDate'] = pd.to_datetime(df['endDate'])
+    # utc=True handles mixed-timezone strings; .dt.tz_localize(None) strips tz for clean sorting
+    df.loc[:, 'startDate'] = pd.to_datetime(df['startDate'], utc=True).dt.tz_localize(None)
+    df.loc[:, 'endDate']   = pd.to_datetime(df['endDate'],   utc=True).dt.tz_localize(None)
     return df
 
 
 def filter_recent_data(df, max_gap_months=1):
-    df = df.sort_values('startDate').copy()
+    df = df.sort_values('startDate').reset_index(drop=True).copy()
     gap_days = int(max_gap_months * 30)
     gaps = df['startDate'].diff().dt.days
     last_gap_idx = gaps[gaps > gap_days].last_valid_index()
     if last_gap_idx is None:
         return df
     pos = df.index.get_loc(last_gap_idx)
-    return df.iloc[pos + 1:]
+    return df.iloc[pos + 1:].reset_index(drop=True)
 
 
 def extract_rhr(df):
     rhr = df[df['type'] == 'HKQuantityTypeIdentifierRestingHeartRate'].copy()
-    rhr['value'] = pd.to_numeric(rhr['value'], errors='coerce')
-    rhr['date'] = rhr['startDate'].dt.normalize().dt.date
-    daily = rhr.groupby('date')['value'].mean().reset_index()
+    parsed_dates = pd.to_datetime(rhr['startDate'], utc=True).dt.tz_localize(None)
+    daily = pd.DataFrame({
+        'date': parsed_dates.dt.normalize().dt.date,
+        'value': pd.to_numeric(rhr['value'].values, errors='coerce'),
+    }).groupby('date')['value'].mean().reset_index()
     daily.columns = ['date', 'resting_hr']
     daily['date'] = pd.to_datetime(daily['date'])
     return daily
@@ -61,9 +64,11 @@ def extract_rhr(df):
 
 def extract_hrv(df):
     hrv = df[df['type'] == 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN'].copy()
-    hrv['value'] = pd.to_numeric(hrv['value'], errors='coerce')
-    hrv['date'] = hrv['startDate'].dt.normalize().dt.date
-    daily = hrv.groupby('date')['value'].mean().reset_index()
+    parsed_dates = pd.to_datetime(hrv['startDate'], utc=True).dt.tz_localize(None)
+    daily = pd.DataFrame({
+        'date': parsed_dates.dt.normalize().dt.date,
+        'value': pd.to_numeric(hrv['value'].values, errors='coerce'),
+    }).groupby('date')['value'].mean().reset_index()
     daily.columns = ['date', 'hrv']
     daily['date'] = pd.to_datetime(daily['date'])
     return daily
@@ -153,7 +158,7 @@ def combined_to_chart_data(combined):
     }
 
 
-# ── routes ──
+# ── routes ──────────────────────────────────────────────────────────────────
 
 @app.post("/analyze")
 async def analyze(file: UploadFile = File(...)):
