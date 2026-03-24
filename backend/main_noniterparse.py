@@ -1,13 +1,14 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import xml.etree.ElementTree as ET
 import pandas as pd
 import numpy as np
 import anthropic
 import os
+import json
 import tempfile
-import pathlib
 
 app = FastAPI(title="HealthSync API")
 
@@ -18,31 +19,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Only pull the record types we actually need — saves huge memory on large exports
-WANTED_TYPES = {
-    'HKQuantityTypeIdentifierRestingHeartRate',
-    'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
-}
+# ── pipeline (from your notebook) ──────────────────────────────────────────
 
 def load_data(filepath):
+    tree = ET.parse(filepath)
+    root = tree.getroot()
     records = []
-    for event, elem in ET.iterparse(filepath, events=('end',)):
-        if elem.tag == 'Record' and elem.get('type') in WANTED_TYPES:
-            records.append({
-                'type': elem.get('type'),
-                'startDate': elem.get('startDate'),
-                'value': elem.get('value'),
-            })
-        elem.clear()
-    if not records:
-        return pd.DataFrame()
+    for record in root.findall('Record'):
+        records.append({
+            'type': record.get('type'),
+            'startDate': record.get('startDate'),
+            'endDate': record.get('endDate'),
+            'value': record.get('value'),
+        })
     df = pd.DataFrame(records)
-    df['startDate'] = pd.to_datetime(df['startDate'], utc=True).dt.tz_localize(None)
+    # utc=True handles mixed-timezone strings; .dt.tz_localize(None) strips tz for clean sorting
+    df.loc[:, 'startDate'] = pd.to_datetime(df['startDate'], utc=True).dt.tz_localize(None)
+    df.loc[:, 'endDate']   = pd.to_datetime(df['endDate'],   utc=True).dt.tz_localize(None)
     return df
 
 
 def filter_recent_data(df, max_gap_months=1):
-    df = df.sort_values('startDate').reset_index(drop=True)
+    df = df.sort_values('startDate').reset_index(drop=True).copy()
     gap_days = int(max_gap_months * 30)
     gaps = df['startDate'].diff().dt.days
     last_gap_idx = gaps[gaps > gap_days].last_valid_index()
@@ -112,7 +110,8 @@ def build_insight_payload(combined, recent_window=14):
 def generate_health_insight(payload):
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        return "No API key set — add ANTHROPIC_API_KEY to your environment."
+        return "⚠️ No API key set. Add ANTHROPIC_API_KEY to your environment to enable AI insights."
+
     client = anthropic.Anthropic(api_key=api_key)
     prompt = f"""You are a health intelligence assistant analyzing wearable data for a personal health tracking app.
 
@@ -147,16 +146,19 @@ Rules:
 
 
 def combined_to_chart_data(combined):
+    """Convert dataframe to JSON-serialisable chart data."""
     df = combined.copy().dropna(subset=['rhr_baseline'])
     return {
         "dates": [str(d.date()) for d in df['date']],
-        "rhr": [round(float(v), 1) if pd.notna(v) else None for v in df['resting_hr']],
-        "rhr_baseline": [round(float(v), 1) if pd.notna(v) else None for v in df['rhr_baseline']],
-        "hrv": [round(float(v), 1) if pd.notna(v) else None for v in df['hrv']],
-        "hrv_baseline": [round(float(v), 1) if pd.notna(v) else None for v in df['hrv_baseline']],
+        "rhr": [round(float(v), 1) if not np.isnan(v) else None for v in df['resting_hr']],
+        "rhr_baseline": [round(float(v), 1) if not np.isnan(v) else None for v in df['rhr_baseline']],
+        "hrv": [round(float(v), 1) if not np.isnan(v) else None for v in df['hrv']],
+        "hrv_baseline": [round(float(v), 1) if not np.isnan(v) else None for v in df['hrv_baseline']],
         "drift_score": [int(v) for v in df['drift_score']],
     }
 
+
+# ── routes ──────────────────────────────────────────────────────────────────
 
 @app.post("/analyze")
 async def analyze(file: UploadFile = File(...)):
@@ -169,29 +171,31 @@ async def analyze(file: UploadFile = File(...)):
 
     try:
         raw = load_data(tmp_path)
-        if raw.empty:
-            raise HTTPException(422, "No RHR or HRV data found in this export.")
-
         raw = filter_recent_data(raw)
         daily_rhr = extract_rhr(raw)
         daily_hrv = extract_hrv(raw)
 
         if daily_rhr.empty:
-            raise HTTPException(422, "No resting heart rate data found.")
+            raise HTTPException(422, "No resting heart rate data found in this export.")
         if daily_hrv.empty:
             raise HTTPException(422, "No HRV data found. Make sure your Apple Watch has recorded HRV.")
 
         combined = daily_rhr.merge(daily_hrv, on='date', how='inner')
         if len(combined) < 7:
-            raise HTTPException(422, f"Only {len(combined)} days of overlapping RHR+HRV data. Need at least 7.")
+            raise HTTPException(422, f"Only {len(combined)} days of overlapping RHR+HRV data found. Need at least 7.")
 
         combined = compute_baselines_and_deviations(combined)
         combined = drift_score(combined)
+
         payload = build_insight_payload(combined)
         insight = generate_health_insight(payload)
         chart_data = combined_to_chart_data(combined)
 
-        return {"insight": insight, "payload": payload, "chart": chart_data}
+        return {
+            "insight": insight,
+            "payload": payload,
+            "chart": chart_data,
+        }
     finally:
         os.unlink(tmp_path)
 
@@ -200,6 +204,10 @@ async def analyze(file: UploadFile = File(...)):
 def health():
     return {"status": "ok"}
 
+# # Serve frontend
+# app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")
 
+# Serve frontend — works both locally and on Render
+import pathlib
 _frontend = pathlib.Path(__file__).parent.parent / "frontend"
 app.mount("/", StaticFiles(directory=str(_frontend), html=True), name="frontend")
