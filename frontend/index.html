@@ -689,7 +689,7 @@ async function handleFile(file) {
     const chartData     = buildChartData(withDrift);
 
     // 4. Send only the small structured payload to the server for AI insight
-    setLoading('Getting AI insight…', 'sending structured summary only — raw data stays on your device');
+    setLoading('Analyzing your data...', 'sending structured summary only — <em>your</em> raw data stays on <em>your</em> device');
 
     const res  = await fetch(`${API}/insight`, {
       method: 'POST',
