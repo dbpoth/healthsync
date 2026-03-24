@@ -35,7 +35,6 @@
       line-height: 1.6;
     }
 
-    /* ── layout ── */
     #app { min-height: 100vh; display: flex; flex-direction: column; }
 
     header {
@@ -79,7 +78,7 @@
       margin: 0 auto;
     }
 
-    /* ── upload state ── */
+    /* ── upload ── */
     #upload-view {
       display: flex;
       flex-direction: column;
@@ -162,9 +161,41 @@
       line-height: 1.8;
     }
 
-    .how-to strong {
-      color: var(--accent);
-      font-weight: 500;
+    .how-to strong { color: var(--accent); font-weight: 500; }
+
+    /* sample dataset pill */
+    .sample-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .sample-divider {
+      height: 1px;
+      width: 60px;
+      background: var(--border2);
+    }
+
+    .sample-btn {
+      background: transparent;
+      border: 1px solid var(--border2);
+      color: var(--accent2);
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      padding: 7px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      letter-spacing: 0.06em;
+      transition: border-color 0.2s, background 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .sample-btn:hover {
+      border-color: var(--accent2);
+      background: rgba(125,211,168,0.06);
     }
 
     /* ── loading ── */
@@ -192,6 +223,12 @@
       font-size: 13px;
       color: var(--muted);
       font-style: italic;
+    }
+
+    .loading-detail {
+      font-size: 11px;
+      color: var(--muted);
+      opacity: 0.6;
     }
 
     /* ── results ── */
@@ -232,12 +269,12 @@
       margin-top: 6px;
     }
 
-    .trend-up   { color: var(--warn); }
-    .trend-down { color: var(--hrv-col); }
-    .trend-stable { color: var(--accent2); }
-    .score-low  { color: var(--accent2); }
-    .score-mid  { color: var(--warn); }
-    .score-high { color: var(--danger); }
+    .trend-up    { color: var(--warn); }
+    .trend-down  { color: var(--hrv-col); }
+    .trend-stable{ color: var(--accent2); }
+    .score-low   { color: var(--accent2); }
+    .score-mid   { color: var(--warn); }
+    .score-high  { color: var(--danger); }
 
     .insight-card {
       background: var(--bg2);
@@ -369,6 +406,15 @@
         </div>
       </div>
 
+      <!-- Sample dataset row -->
+      <div class="sample-row">
+        <div class="sample-divider"></div>
+        <span>no Apple Watch?</span>
+        <a href="/sample_health_data.xml" download class="sample-btn">↓ download sample dataset</a>
+        <span>and try it out</span>
+        <div class="sample-divider"></div>
+      </div>
+
       <div class="how-to">
         <strong>How to export from Apple Health</strong><br>
         iPhone → Health app → your profile photo (top right) → Export All Health Data → Share → save the zip → unzip → upload <code>export.xml</code>
@@ -378,7 +424,8 @@
     <!-- Loading -->
     <div id="loading-view">
       <div class="spinner"></div>
-      <span class="loading-msg">Analyzing your data…</span>
+      <span class="loading-msg" id="loading-msg">Reading your file…</span>
+      <span class="loading-detail" id="loading-detail"></span>
     </div>
 
     <!-- Error -->
@@ -435,11 +482,20 @@
 
 <script src="/chart.min.js"></script>
 <script>
+// ─────────────────────────────────────────────────────────
+//  CONFIG
+// ─────────────────────────────────────────────────────────
 const API = '';  // same origin; change to 'http://localhost:8000' for dev
+
+// Apple Health type identifiers we care about
+const T_RHR = 'HKQuantityTypeIdentifierRestingHeartRate';
+const T_HRV = 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN';
 
 let rhrChart, hrvChart, driftChart;
 
-// drag and drop
+// ─────────────────────────────────────────────────────────
+//  DRAG AND DROP / FILE INPUT
+// ─────────────────────────────────────────────────────────
 const dz = document.getElementById('drop-zone');
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
 dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
@@ -453,26 +509,220 @@ document.getElementById('file-input').addEventListener('change', e => {
   if (e.target.files[0]) handleFile(e.target.files[0]);
 });
 
+// ─────────────────────────────────────────────────────────
+//  CLIENT-SIDE XML PARSING
+//  Extracts only RHR + HRV records. Never sends raw XML to server.
+// ─────────────────────────────────────────────────────────
+function parseHealthXML(xmlText) {
+  setLoading('Parsing health records…', '');
+
+  // Use the browser's native DOMParser — no library needed
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, 'application/xml');
+
+  const parseError = doc.querySelector('parsererror');
+  if (parseError) throw new Error('Could not parse XML. Make sure you uploaded a valid export.xml file.');
+
+  const records = doc.querySelectorAll('Record');
+  if (!records.length) throw new Error('No health records found in this file.');
+
+  const rhrRows = [];
+  const hrvRows = [];
+
+  records.forEach(r => {
+    const type = r.getAttribute('type');
+    if (type !== T_RHR && type !== T_HRV) return;
+
+    const dateStr = r.getAttribute('startDate');
+    const val = parseFloat(r.getAttribute('value'));
+    if (!dateStr || isNaN(val)) return;
+
+    const row = { date: new Date(dateStr), value: val };
+    if (type === T_RHR) rhrRows.push(row);
+    else                hrvRows.push(row);
+  });
+
+  return { rhrRows, hrvRows };
+}
+
+// ─────────────────────────────────────────────────────────
+//  BUILD PAYLOAD  (mirrors main.py logic in JS)
+// ─────────────────────────────────────────────────────────
+function toDateKey(d) {
+  // YYYY-MM-DD string for grouping
+  return d.toISOString().slice(0, 10);
+}
+
+function groupByDay(rows, valueKey) {
+  const map = {};
+  rows.forEach(({ date, value }) => {
+    const k = toDateKey(date);
+    if (!map[k]) map[k] = [];
+    map[k].push(value);
+  });
+  // average per day
+  return Object.entries(map)
+    .map(([date, vals]) => ({ date, [valueKey]: vals.reduce((a, b) => a + b, 0) / vals.length }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function filterRecentData(rows, maxGapDays = 30) {
+  if (!rows.length) return rows;
+  for (let i = rows.length - 1; i > 0; i--) {
+    const gap = (new Date(rows[i].date) - new Date(rows[i-1].date)) / 86400000;
+    if (gap > maxGapDays) return rows.slice(i);
+  }
+  return rows;
+}
+
+function innerJoin(rhrDaily, hrvDaily) {
+  const rhrMap = Object.fromEntries(rhrDaily.map(r => [r.date, r.resting_hr]));
+  const combined = [];
+  hrvDaily.forEach(h => {
+    if (rhrMap[h.date] !== undefined) {
+      combined.push({ date: h.date, resting_hr: rhrMap[h.date], hrv: h.hrv });
+    }
+  });
+  return combined;
+}
+
+function computeBaselines(combined, window = 30) {
+  return combined.map((row, i) => {
+    const slice = combined.slice(Math.max(0, i - window + 1), i + 1);
+    const validRhr = slice.map(r => r.resting_hr).filter(v => v != null);
+    const validHrv = slice.map(r => r.hrv).filter(v => v != null);
+    const rhrBaseline = validRhr.length >= 7
+      ? validRhr.reduce((a, b) => a + b, 0) / validRhr.length : null;
+    const hrvBaseline = validHrv.length >= 7
+      ? validHrv.reduce((a, b) => a + b, 0) / validHrv.length : null;
+    return {
+      ...row,
+      rhr_baseline: rhrBaseline,
+      hrv_baseline: hrvBaseline,
+      rhr_dev: rhrBaseline != null ? row.resting_hr - rhrBaseline : null,
+      hrv_dev: hrvBaseline != null ? row.hrv - hrvBaseline : null,
+    };
+  });
+}
+
+function computeDrift(combined, rhrThresh = 5, hrvThresh = -10) {
+  return combined.map(row => ({
+    ...row,
+    drift_score: (row.rhr_dev != null && row.rhr_dev > rhrThresh ? 1 : 0) +
+                 (row.hrv_dev != null && row.hrv_dev < hrvThresh ? 1 : 0),
+  }));
+}
+
+function buildPayload(combined, recentWindow = 14) {
+  const recent = combined.slice(-recentWindow);
+  const validRhrDev = recent.map(r => r.rhr_dev).filter(v => v != null);
+  const validHrvDev = recent.map(r => r.hrv_dev).filter(v => v != null);
+  const last3Rhr = recent.slice(-3).map(r => r.rhr_dev).filter(v => v != null);
+  const last3Hrv = recent.slice(-3).map(r => r.hrv_dev).filter(v => v != null);
+
+  const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const rhrMeanDev = +avg(validRhrDev).toFixed(2);
+  const hrvMeanDev = +avg(validHrvDev).toFixed(2);
+  const last3RhrAvg = avg(last3Rhr);
+  const last3HrvAvg = avg(last3Hrv);
+
+  return {
+    rhr_mean_dev: rhrMeanDev,
+    hrv_mean_dev: hrvMeanDev,
+    drift_score_avg: +avg(recent.map(r => r.drift_score)).toFixed(2),
+    days_flagged: recent.reduce((sum, r) => sum + r.drift_score, 0),
+    rhr_trend: last3RhrAvg > 2 ? 'up' : last3RhrAvg < -2 ? 'down' : 'stable',
+    hrv_trend: last3HrvAvg < -3 ? 'down' : last3HrvAvg > 3 ? 'up' : 'stable',
+    window_days: recentWindow,
+    date_range: `${recent[0].date} to ${recent[recent.length - 1].date}`,
+  };
+}
+
+function buildChartData(combined) {
+  const filtered = combined.filter(r => r.rhr_baseline != null);
+  return {
+    dates:        filtered.map(r => r.date),
+    rhr:          filtered.map(r => +r.resting_hr.toFixed(1)),
+    rhr_baseline: filtered.map(r => +r.rhr_baseline.toFixed(1)),
+    hrv:          filtered.map(r => +r.hrv.toFixed(1)),
+    hrv_baseline: filtered.map(r => +r.hrv_baseline.toFixed(1)),
+    drift_score:  filtered.map(r => r.drift_score),
+  };
+}
+
+// ─────────────────────────────────────────────────────────
+//  MAIN FLOW
+// ─────────────────────────────────────────────────────────
 async function handleFile(file) {
   show('loading-view');
-  const fd = new FormData();
-  fd.append('file', file);
+
   try {
-    const res = await fetch(`${API}/analyze`, { method: 'POST', body: fd });
+    setLoading('Reading your file…', '');
+
+    // 1. Read file as text in browser
+    const xmlText = await readFileAsText(file);
+
+    // 2. Parse XML client-side — no memory pressure on server
+    const { rhrRows, hrvRows } = parseHealthXML(xmlText);
+
+    if (!rhrRows.length) throw new Error('No resting heart rate data found. Make sure this is an Apple Health export.xml.');
+    if (!hrvRows.length) throw new Error('No HRV data found. Make sure your Apple Watch has recorded HRV (SDNN).');
+
+    setLoading('Computing baselines…', `${rhrRows.length + hrvRows.length} records found`);
+
+    // 3. Process locally — matches main.py logic exactly
+    let rhrDaily = filterRecentData(groupByDay(rhrRows, 'resting_hr').map(r => ({...r, resting_hr: r.resting_hr})));
+    let hrvDaily = filterRecentData(groupByDay(hrvRows, 'hrv').map(r => ({...r, hrv: r.hrv})));
+
+    const combined = innerJoin(
+      rhrDaily.map(r => ({...r, resting_hr: r.resting_hr ?? r['resting_hr']})),
+      hrvDaily
+    );
+
+    if (combined.length < 7) {
+      throw new Error(`Only ${combined.length} days of overlapping RHR+HRV data. Need at least 7.`);
+    }
+
+    const withBaselines = computeBaselines(combined);
+    const withDrift     = computeDrift(withBaselines);
+    const payload       = buildPayload(withDrift);
+    const chartData     = buildChartData(withDrift);
+
+    // 4. Send only the small structured payload to the server for AI insight
+    setLoading('Getting AI insight…', 'sending structured summary only — raw data stays on your device');
+
+    const res  = await fetch(`${API}/insight`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Analysis failed');
-    showResults(data);
-  } catch(err) {
+    if (!res.ok) throw new Error(data.detail || 'Insight generation failed');
+
+    showResults({ insight: data.insight, payload, chart: chartData });
+
+  } catch (err) {
     document.getElementById('error-text').textContent = err.message;
     show('error-view');
   }
 }
 
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = e => resolve(e.target.result);
+    reader.onerror = () => reject(new Error('Could not read the file.'));
+    reader.readAsText(file);
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+//  RENDER RESULTS  (unchanged from original)
+// ─────────────────────────────────────────────────────────
 function showResults(data) {
   const p = data.payload;
   const c = data.chart;
 
-  // stats
   const rhrDev = p.rhr_mean_dev;
   const hrvDev = p.hrv_mean_dev;
   const drift  = p.drift_score_avg;
@@ -482,7 +732,6 @@ function showResults(data) {
   document.getElementById('stat-drift').textContent   = drift.toFixed(2);
   document.getElementById('stat-days-flagged').textContent = p.days_flagged;
 
-  // trend colours
   const trendEl = (id, trend, upBad) => {
     const el = document.getElementById(id);
     el.textContent = trend;
@@ -493,14 +742,11 @@ function showResults(data) {
   trendEl('stat-rhr-trend', p.rhr_trend, true);
   trendEl('stat-hrv-trend', p.hrv_trend, false);
 
-  // drift color
   const driftEl = document.getElementById('stat-drift');
   driftEl.className = 'stat-value ' + (drift < 0.5 ? 'score-low' : drift < 1.2 ? 'score-mid' : 'score-high');
 
-  // insight
   document.getElementById('insight-text').textContent = data.insight;
 
-  // charts
   const chartDefaults = {
     responsive: true,
     maintainAspectRatio: false,
@@ -517,8 +763,8 @@ function showResults(data) {
     data: {
       labels: c.dates,
       datasets: [
-        { label: 'RHR', data: c.rhr, borderColor: '#7dd3a8', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false },
-        { label: 'Baseline', data: c.rhr_baseline, borderColor: 'rgba(255,255,255,0.2)', borderWidth: 1, borderDash: [4,4], pointRadius: 0, tension: 0.3, fill: false },
+        { label: 'RHR',      data: c.rhr,          borderColor: '#7dd3a8', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false },
+        { label: 'Baseline', data: c.rhr_baseline,  borderColor: 'rgba(255,255,255,0.2)', borderWidth: 1, borderDash: [4,4], pointRadius: 0, tension: 0.3, fill: false },
       ]
     },
     options: chartDefaults,
@@ -530,8 +776,8 @@ function showResults(data) {
     data: {
       labels: c.dates,
       datasets: [
-        { label: 'HRV', data: c.hrv, borderColor: '#80b4f0', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false },
-        { label: 'Baseline', data: c.hrv_baseline, borderColor: 'rgba(255,255,255,0.2)', borderWidth: 1, borderDash: [4,4], pointRadius: 0, tension: 0.3, fill: false },
+        { label: 'HRV',      data: c.hrv,          borderColor: '#80b4f0', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false },
+        { label: 'Baseline', data: c.hrv_baseline,  borderColor: 'rgba(255,255,255,0.2)', borderWidth: 1, borderDash: [4,4], pointRadius: 0, tension: 0.3, fill: false },
       ]
     },
     options: chartDefaults,
@@ -549,6 +795,14 @@ function showResults(data) {
   });
 
   show('results-view');
+}
+
+// ─────────────────────────────────────────────────────────
+//  HELPERS
+// ─────────────────────────────────────────────────────────
+function setLoading(msg, detail) {
+  document.getElementById('loading-msg').textContent    = msg;
+  document.getElementById('loading-detail').textContent = detail;
 }
 
 function show(id) {
