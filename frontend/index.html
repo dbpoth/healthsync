@@ -764,9 +764,29 @@ function showResults(data) {
     pointHoverBorderWidth: 1,
   };
 
+  const tooltipBg = '#181c22';
   const lineChartOptions = {
     ...chartDefaults,
     interaction: { mode: 'index', intersect: false },
+    plugins: {
+      ...chartDefaults.plugins,
+      tooltip: {
+        ...chartDefaults.plugins.tooltip,
+        multiKeyBackground: tooltipBg,
+        callbacks: {
+          labelColor(ctx) {
+            const ds = ctx.chart.data.datasets[ctx.datasetIndex];
+            return {
+              borderColor: ds.borderColor,
+              backgroundColor: tooltipBg,
+              borderWidth: ds.borderWidth ?? 1,
+              borderDash: ds.borderDash || [],
+              borderDashOffset: ds.borderDashOffset ?? 0,
+            };
+          },
+        },
+      },
+    },
   };
 
   if (rhrChart) rhrChart.destroy();
