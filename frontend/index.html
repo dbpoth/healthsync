@@ -757,17 +757,29 @@ function showResults(data) {
     }
   };
 
+  const linePoint = {
+    pointRadius: 0,
+    pointHitRadius: 14,
+    pointHoverRadius: 4,
+    pointHoverBorderWidth: 1,
+  };
+
+  const lineChartOptions = {
+    ...chartDefaults,
+    interaction: { mode: 'index', intersect: false },
+  };
+
   if (rhrChart) rhrChart.destroy();
   rhrChart = new Chart(document.getElementById('rhr-chart'), {
     type: 'line',
     data: {
       labels: c.dates,
       datasets: [
-        { label: 'RHR',      data: c.rhr,          borderColor: '#7dd3a8', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false },
-        { label: 'Baseline', data: c.rhr_baseline,  borderColor: 'rgba(255,255,255,0.2)', borderWidth: 1, borderDash: [4,4], pointRadius: 0, tension: 0.3, fill: false },
+        { label: 'RHR',      data: c.rhr,          borderColor: '#7dd3a8', borderWidth: 1.5, ...linePoint, pointHoverBackgroundColor: '#7dd3a8', pointHoverBorderColor: '#0a0c0f', tension: 0.3, fill: false },
+        { label: 'Baseline', data: c.rhr_baseline,  borderColor: 'rgba(255,255,255,0.2)', borderWidth: 1, borderDash: [4,4], ...linePoint, pointHoverBackgroundColor: 'rgba(255,255,255,0.35)', pointHoverBorderColor: '#0a0c0f', tension: 0.3, fill: false },
       ]
     },
-    options: chartDefaults,
+    options: lineChartOptions,
   });
 
   if (hrvChart) hrvChart.destroy();
@@ -776,11 +788,11 @@ function showResults(data) {
     data: {
       labels: c.dates,
       datasets: [
-        { label: 'HRV',      data: c.hrv,          borderColor: '#80b4f0', borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false },
-        { label: 'Baseline', data: c.hrv_baseline,  borderColor: 'rgba(255,255,255,0.2)', borderWidth: 1, borderDash: [4,4], pointRadius: 0, tension: 0.3, fill: false },
+        { label: 'HRV',      data: c.hrv,          borderColor: '#80b4f0', borderWidth: 1.5, ...linePoint, pointHoverBackgroundColor: '#80b4f0', pointHoverBorderColor: '#0a0c0f', tension: 0.3, fill: false },
+        { label: 'Baseline', data: c.hrv_baseline,  borderColor: 'rgba(255,255,255,0.2)', borderWidth: 1, borderDash: [4,4], ...linePoint, pointHoverBackgroundColor: 'rgba(255,255,255,0.35)', pointHoverBorderColor: '#0a0c0f', tension: 0.3, fill: false },
       ]
     },
-    options: chartDefaults,
+    options: lineChartOptions,
   });
 
   if (driftChart) driftChart.destroy();
