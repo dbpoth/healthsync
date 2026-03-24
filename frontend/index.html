@@ -4,6 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>HealthSync</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300&display=swap" rel="stylesheet">
   <style>
@@ -162,6 +163,15 @@
     }
 
     .how-to strong { color: var(--accent); font-weight: 500; }
+
+    .privacy-note {
+      font-size: 11px;
+      color: var(--muted);
+      opacity: 0.6;
+      text-align: center;
+      max-width: 480px;
+      margin: 0;
+    }
 
     /* sample dataset pill */
     .sample-row {
@@ -406,14 +416,26 @@
         </div>
       </div>
 
-      <!-- Sample dataset row -->
+      <!-- Sample dataset row
       <div class="sample-row">
         <div class="sample-divider"></div>
         <span>no Apple Watch?</span>
         <a href="/sample_health_data.xml" download class="sample-btn">↓ download sample dataset</a>
         <span>and try it out</span>
         <div class="sample-divider"></div>
+      </div> -->
+
+      <!-- Sample dataset row -->
+      <div class="sample-row">
+        <div class="sample-divider"></div>
+        <span>no Apple Watch?</span>
+        <button class="sample-btn" onclick="runSample()">→ try with sample data</button>
+        <div class="sample-divider"></div>
       </div>
+
+      <p class="privacy-note">
+        Your raw data never leaves your device — only a small statistical summary is sent to generate the AI insight.
+      </p>
 
       <div class="how-to">
         <strong>How to export from Apple Health</strong><br>
@@ -689,7 +711,7 @@ async function handleFile(file) {
     const chartData     = buildChartData(withDrift);
 
     // 4. Send only the small structured payload to the server for AI insight
-    setLoading('Analyzing your data...', 'sending structured summary only — <em>your</em> raw data stays on <em>your</em> device');
+    setLoading('Analyzing your data...', 'sending structured summary only — your raw data stays on your device');
 
     const res  = await fetch(`${API}/insight`, {
       method: 'POST',
@@ -842,6 +864,20 @@ function show(id) {
     const el = document.getElementById(v);
     el.style.display = (v === id) ? (v === 'upload-view' || v === 'loading-view' || v === 'error-view' ? 'flex' : 'block') : 'none';
   });
+}
+
+async function runSample() {
+  show('loading-view');
+  try {
+    const res = await fetch('/sample_health_data.xml');
+    const text = await res.text();
+    const blob = new Blob([text], { type: 'text/xml' });
+    const file = new File([blob], 'sample_health_data.xml', { type: 'text/xml' });
+    await handleFile(file);
+  } catch(err) {
+    document.getElementById('error-text').textContent = 'Could not load sample data: ' + err.message;
+    show('error-view');
+  }
 }
 
 function reset() {

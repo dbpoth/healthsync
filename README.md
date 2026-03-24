@@ -1,60 +1,65 @@
-## HealthSync -- Longitudinal Heart Health Intelligence Engine
+# HealthSync
 
-### Overview (updated: 2/17/26)
-HealthSync is a patient-first health intelligence system designed to detect meaningful changes in cardiovascular-related metrics over time.
+**Longitudinal heart health intelligence for Apple Watch users.**
 
-The system focuses on longitudinal trend detection rather than diagnosis. It analyzes wearable data (e.g., resting heart rate, sleep, activity) to:
+HealthSync analyzes your Apple Health data to establish your *personal* cardiovascular baseline, detect meaningful drift over time, and generate a plain-English weekly summary — powered by Claude AI.
 
-- Establish a personal baseline
-- Detect sustained deviations from that baseline
-- Identify potential associations between behavior and physiological response
-- Generate structured weekly summaries
+**Live demo → [healthsync-p1ai.onrender.com](https://healthsync-p1ai.onrender.com)**
 
-This system does not diagnose, predict medical events, or replace professional medical care. It is designed to support self-awareness and more informed clinical conversations.
+No Apple Watch? Hit "try with sample data" on the site to see a full demo instantly.
 
-### Problem
-Many individuals monitor wearable health data daily but lack:
+---
 
-- Context for what is “normal” for them
-- Visibility into gradual trend changes
-- Understanding of how habits influence physiological metrics
-- Clear summaries to bring to healthcare providers
+## What it does
 
-Healthcare interactions are episodic. Wearable data is continuous. There is a gap between raw data and actionable understanding.
+Most people with Apple Watches accumulate months or years of heart data they never actually understand. HealthSync bridges that gap:
 
-### Scope (Phase 1)
-Initial focus: Early heart health monitoring.
+- Computes your **personal 30-day rolling baseline** for resting heart rate (RHR) and heart rate variability (HRV)
+- Detects **sustained deviation** from that baseline — not just daily noise, but meaningful drift
+- Scores each day with a **drift score (0–2)** based on how many metrics are flagged
+- Generates a **plain-English AI insight** summarizing your last 14 days
 
-Target user: 
-- Individuals in their 20s-40s
-- Generally healthy but health-conscious
-- May have family history or borderline cardiovascular indicators
-- Use wearable devices regularly
+## Privacy-first architecture
 
-Supported inputs: 
-- Supported inputs (v1):
-- Resting heart rate
-- ~~Sleep metrics~~
-- Activity metrics
+Your raw health data never leaves your device. All XML parsing, baseline computation, and drift scoring runs entirely in the browser. Only a small pre-computed statistical summary (8 numbers) is sent to the server to generate the AI insight.
 
-#### What This System Does
-- Computes rolling personal baselines
-- Detects sustained upward or downward drift
-- Quantifies deviation from baseline
-- Identifies simple correlations between behavior and physiological changes
-- Outputs structured, safe insight objects
+```
+Apple Health XML → parsed in YOUR browser
+                 → baselines + drift computed locally  
+                 → 8-number payload sent to server
+                 → Claude generates insight → shown to you
+```
 
-#### What This System Does NOT Do
-- Diagnose medical conditions
-- Predict heart attacks or disease
-- Provide medical treatment advice
-- Replace healthcare professionals
-- Interpret medical imaging or complex clinical records (v1)
+## How to use
 
-### Architecture (Early Stage)
-Data --> Cleaning --> Baseline Modeling --> Trend Detection --> Structured Insight --> (Future) Narrative Layer
+1. On your iPhone: Health app → profile photo → Export All Health Data
+2. Unzip the downloaded file
+3. Upload `export.xml` to [healthsync-p1ai.onrender.com](https://healthsync-p1ai.onrender.com)
+4. See your personal baselines, drift chart, and AI weekly insight
 
-The LLM layer, when introduced, will operate only on structured insights (not raw health data) to maintain safety and guardrails.
+## Tech stack
 
-## Current Milestone
-Phase 1 (2/17/26 - X/XX/XX): Build baseline modeling and trend detection over 8+ weeks of wearable data.
+- **Frontend**: Vanilla JS + Chart.js — full pipeline runs in the browser
+- **Backend**: FastAPI (Python) — single `/insight` endpoint, calls Claude API
+- **AI**: Claude Sonnet via Anthropic API
+- **Deploy**: Render
+
+## Local development
+
+```bash
+# backend
+cd backend
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY=sk-ant-...
+uvicorn main:app --reload --port 8000
+
+# frontend served automatically at http://localhost:8000
+```
+
+## What's next
+
+HealthSync is Phase 1 of a larger vision: correlating cardiovascular data with calendar stress, travel, sleep, and activity to give people a truly longitudinal picture of how their life affects their heart — and vice versa. The goal is to make the kind of personalized health intelligence that used to require a clinical team accessible to anyone with a wearable device.
+
+---
+
+*Not a medical device. Does not diagnose or predict medical events.*
