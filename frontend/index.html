@@ -717,12 +717,27 @@ async function handleFile(file) {
     // 4. Send only the small structured payload to the server for AI insight
     setLoading('Analyzing your data...', 'sending structured summary only — your raw data stays on your device');
 
-    const res  = await fetch(`${API}/insight`, {
+    // const res  = await fetch(`${API}/insight`, {
+    //   method: 'POST',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify(payload),
+    // });
+    // const data = await res.json();
+    // if (!res.ok) throw new Error(data.detail || 'Insight generation failed');
+
+    const res = await fetch(`${API}/insight`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
+
+    // Try to parse JSON, but don't crash if it's a plain-text error
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error(`Server error (${res.status}). Check that your API key is set on Render.`);
+    }
     if (!res.ok) throw new Error(data.detail || 'Insight generation failed');
 
     showResults({ insight: data.insight, payload, chart: chartData });
