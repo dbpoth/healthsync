@@ -570,10 +570,14 @@ function parseHealthXML(xmlText) {
 // ─────────────────────────────────────────────────────────
 //  BUILD PAYLOAD  (mirrors main.py logic in JS)
 // ─────────────────────────────────────────────────────────
-function toDateKey(d) {
-  // YYYY-MM-DD string for grouping
-  return d.toISOString().slice(0, 10);
+
+function toDateKey(d) { // ** timezone safe!
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
+
 
 function groupByDay(rows, valueKey) {
   const map = {};
