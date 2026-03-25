@@ -559,7 +559,9 @@ function parseHealthXML(xmlText) {
     const val = parseFloat(r.getAttribute('value'));
     if (!dateStr || isNaN(val)) return;
 
-    const row = { date: new Date(dateStr), value: val };
+    // Extract YYYY-MM-DD directly from the string — no Date object, no timezone issues
+    const dateKey = dateStr.slice(0, 10);
+    const row = { date: dateKey, value: val };  // store as string, not Date
     if (type === T_RHR) rhrRows.push(row);
     else                hrvRows.push(row);
   });
@@ -578,19 +580,30 @@ function toDateKey(d) { // ** timezone safe!
   return `${y}-${m}-${day}`;
 }
 
-
 function groupByDay(rows, valueKey) {
   const map = {};
   rows.forEach(({ date, value }) => {
-    const k = toDateKey(date);
+    const k = date; // already "YYYY-MM-DD"
     if (!map[k]) map[k] = [];
     map[k].push(value);
   });
-  // average per day
   return Object.entries(map)
     .map(([date, vals]) => ({ date, [valueKey]: vals.reduce((a, b) => a + b, 0) / vals.length }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
+
+// function groupByDay(rows, valueKey) {
+//   const map = {};
+//   rows.forEach(({ date, value }) => {
+//     const k = toDateKey(date);
+//     if (!map[k]) map[k] = [];
+//     map[k].push(value);
+//   });
+//   // average per day
+//   return Object.entries(map)
+//     .map(([date, vals]) => ({ date, [valueKey]: vals.reduce((a, b) => a + b, 0) / vals.length }))
+//     .sort((a, b) => a.date.localeCompare(b.date));
+// }
 
 function filterRecentData(rows, maxGapDays = 30) {
   if (!rows.length) return rows;
