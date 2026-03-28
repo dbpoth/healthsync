@@ -387,6 +387,81 @@
       text-align: center;
       max-width: 480px;
     }
+
+    .timeline-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 28px;
+    }
+
+    .timeline-header {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .timeline-dots {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .timeline-dot {
+      position: relative;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      cursor: default;
+      flex-shrink: 0;
+      transition: transform 0.15s;
+    }
+
+    .timeline-dot:hover { transform: scale(1.25); }
+
+    .timeline-dot.drift-0  { background: var(--accent2); }
+    .timeline-dot.drift-1  { background: var(--warn); }
+    .timeline-dot.drift-2  { background: var(--danger); }
+
+    .timeline-tooltip {
+      display: none;
+      position: absolute;
+      bottom: 38px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg3);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 11px;
+      color: var(--text);
+      white-space: nowrap;
+      z-index: 10;
+      line-height: 1.6;
+      pointer-events: none;
+    }
+
+    .timeline-dot:hover .timeline-tooltip { display: block; }
+
+    .timeline-legend {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .legend-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 5px;
+    }
+
   </style>
 </head>
 <body>
@@ -480,6 +555,16 @@
         <div class="chart-card">
           <div class="chart-title">HRV vs personal baseline</div>
           <div class="chart-wrap"><canvas id="hrv-chart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="timeline-card">
+        <div class="timeline-header">14-day drift timeline</div>
+        <div class="timeline-dots" id="timeline-dots"></div>
+        <div class="timeline-legend">
+          <span><span class="legend-dot" style="background:var(--accent2)"></span>baseline</span>
+          <span><span class="legend-dot" style="background:var(--warn)"></span>1 metric flagged</span>
+          <span><span class="legend-dot" style="background:var(--danger)"></span>both flagged</span>
         </div>
       </div>
 
@@ -581,7 +666,6 @@ async function parseHealthXMLStream(file) {
     const safe = lastClose !== -1 ? text.slice(0, lastClose + 2) : '';
     leftover = lastClose !== -1 ? text.slice(lastClose + 2) : text;
 
-    // const tagRegex = /<Record\s([^>]*\/>)/g;
     const tagRegex = /<Record\s([^>]*?)(?:\/>|>)/g;
     let tag;
     while ((tag = tagRegex.exec(safe)) !== null) {
@@ -967,6 +1051,25 @@ function showResults(data) {
       datasets: [{ label: 'Drift score', data: c.drift_score, backgroundColor: driftColors, borderRadius: 2, borderSkipped: false }]
     },
     options: { ...chartDefaults, plugins: { ...chartDefaults.plugins, legend: { display: false } }, scales: { ...chartDefaults.scales, y: { ...chartDefaults.scales.y, min: 0, max: 2, ticks: { stepSize: 1, color: '#6b7280', font: { family: 'DM Mono', size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } } } },
+  });
+
+  // Timeline dots
+  const dotsEl = document.getElementById('timeline-dots');
+  dotsEl.innerHTML = '';
+  p.daily.forEach(day => {
+    const dot = document.createElement('div');
+    dot.className = `timeline-dot drift-${day.drift}`;
+
+    const tip = document.createElement('div');
+    tip.className = 'timeline-tooltip';
+    tip.innerHTML = `
+      <strong>${day.date}</strong><br>
+      RHR ${day.rhr_dev != null ? (day.rhr_dev >= 0 ? '+' : '') + day.rhr_dev + ' bpm' : '—'}<br>
+      HRV ${day.hrv_dev != null ? (day.hrv_dev >= 0 ? '+' : '') + day.hrv_dev + ' ms' : '—'}<br>
+      drift: ${day.drift}/2
+    `;
+    dot.appendChild(tip);
+    dotsEl.appendChild(dot);
   });
 
   show('results-view');
