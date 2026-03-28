@@ -526,39 +526,90 @@ document.getElementById('file-input').addEventListener('change', e => {
 //  CLIENT-SIDE XML PARSING
 //  Extracts only RHR + HRV records. Never sends raw XML to server.
 // ─────────────────────────────────────────────────────────
-function parseHealthXML(xmlText) {
+// function parseHealthXML(xmlText) {
+//   setLoading('Parsing health records…', '');
+
+//   // Strip DOCTYPE — Apple Health exports include internal DTD that strict XML parsers reject
+//   const cleaned = xmlText.replace(/<!DOCTYPE[\s\S]*?(\[[\s\S]*?\])?\s*>/i, '');
+
+//   const parser = new DOMParser();
+//   const doc = parser.parseFromString(cleaned, 'application/xml');
+
+//   const parseError = doc.querySelector('parsererror');
+//   if (parseError) throw new Error('Could not parse XML. Make sure you uploaded a valid export.xml file.');
+
+//   const records = doc.querySelectorAll('Record');
+//   if (!records.length) throw new Error('No health records found in this file.');
+
+//   const rhrRows = [];
+//   const hrvRows = [];
+
+//   records.forEach(r => {
+//     const type = r.getAttribute('type');
+//     if (type !== T_RHR && type !== T_HRV) return;
+
+//     const dateStr = r.getAttribute('startDate');
+//     const val = parseFloat(r.getAttribute('value'));
+//     if (!dateStr || isNaN(val)) return;
+
+//     // Extract YYYY-MM-DD directly from the string — no Date object, no timezone issues
+//     const dateKey = dateStr.slice(0, 10);
+//     const row = { date: dateKey, value: val };  // store as string, not Date
+//     if (type === T_RHR) rhrRows.push(row);
+//     else                hrvRows.push(row);
+//   });
+
+//   return { rhrRows, hrvRows };
+// }
+
+async function parseHealthXMLStream(file) {
   setLoading('Parsing health records…', '');
-
-  // Use the browser's native DOMParser — no library needed
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xmlText, 'application/xml');
-
-  const parseError = doc.querySelector('parsererror');
-  if (parseError) throw new Error('Could not parse XML. Make sure you uploaded a valid export.xml file.');
-
-  const records = doc.querySelectorAll('Record');
-  if (!records.length) throw new Error('No health records found in this file.');
 
   const rhrRows = [];
   const hrvRows = [];
+  const CHUNK = 4 * 1024 * 1024; // 4MB chunks
+  let offset = 0;
+  let leftover = '';
+  const attrRegex = /(\w+)="([^"]*)"/g;
 
-  records.forEach(r => {
-    const type = r.getAttribute('type');
-    if (type !== T_RHR && type !== T_HRV) return;
+  while (offset < file.size) {
+    const slice = file.slice(offset, offset + CHUNK);
+    const chunk = await slice.text();
+    const text = leftover + chunk;
 
-    const dateStr = r.getAttribute('startDate');
-    const val = parseFloat(r.getAttribute('value'));
-    if (!dateStr || isNaN(val)) return;
+    const lastClose = text.lastIndexOf('/>');
+    const safe = lastClose !== -1 ? text.slice(0, lastClose + 2) : '';
+    leftover = lastClose !== -1 ? text.slice(lastClose + 2) : text;
 
-    // Extract YYYY-MM-DD directly from the string — no Date object, no timezone issues
-    const dateKey = dateStr.slice(0, 10);
-    const row = { date: dateKey, value: val };  // store as string, not Date
-    if (type === T_RHR) rhrRows.push(row);
-    else                hrvRows.push(row);
-  });
+    // const tagRegex = /<Record\s([^>]*\/>)/g;
+    const tagRegex = /<Record\s([^>]*?)(?:\/>|>)/g;
+    let tag;
+    while ((tag = tagRegex.exec(safe)) !== null) {
+      const attrs = {};
+      let a;
+      attrRegex.lastIndex = 0;
+      while ((a = attrRegex.exec(tag[1])) !== null) {
+        attrs[a[1]] = a[2];
+      }
+      const type = attrs.type;
+      if (type !== T_RHR && type !== T_HRV) continue;
+      const dateStr = attrs.startDate;
+      const val = parseFloat(attrs.value);
+      if (!dateStr || isNaN(val)) continue;
+      if (type === T_RHR) rhrRows.push({ date: dateStr.slice(0, 10), value: val });
+      else                hrvRows.push({ date: dateStr.slice(0, 10), value: val });
+    }
 
+    offset += CHUNK;
+    setLoading('Parsing health records…', `${Math.round(offset / file.size * 100)}%`);
+  }
+
+  if (!rhrRows.length && !hrvRows.length) {
+    throw new Error('No RHR or HRV records found. Make sure this is an Apple Health export.xml.');
+  }
   return { rhrRows, hrvRows };
 }
+
 
 // ─────────────────────────────────────────────────────────
 //  BUILD PAYLOAD  (mirrors main.py logic in JS)
@@ -582,19 +633,6 @@ function groupByDay(rows, valueKey) {
     .map(([date, vals]) => ({ date, [valueKey]: vals.reduce((a, b) => a + b, 0) / vals.length }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
-
-// function groupByDay(rows, valueKey) {
-//   const map = {};
-//   rows.forEach(({ date, value }) => {
-//     const k = toDateKey(date);
-//     if (!map[k]) map[k] = [];
-//     map[k].push(value);
-//   });
-//   // average per day
-//   return Object.entries(map)
-//     .map(([date, vals]) => ({ date, [valueKey]: vals.reduce((a, b) => a + b, 0) / vals.length }))
-//     .sort((a, b) => a.date.localeCompare(b.date));
-// }
 
 function filterRecentData(rows, maxGapDays = 30) {
   if (!rows.length) return rows;
@@ -643,28 +681,86 @@ function computeDrift(combined, rhrThresh = 5, hrvThresh = -10) {
   }));
 }
 
+// function buildPayload(combined, recentWindow = 14) {
+//   const recent = combined.slice(-recentWindow);
+//   const validRhrDev = recent.map(r => r.rhr_dev).filter(v => v != null);
+//   const validHrvDev = recent.map(r => r.hrv_dev).filter(v => v != null);
+//   const last3Rhr = recent.slice(-3).map(r => r.rhr_dev).filter(v => v != null);
+//   const last3Hrv = recent.slice(-3).map(r => r.hrv_dev).filter(v => v != null);
+
+//   const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+//   const rhrMeanDev = +avg(validRhrDev).toFixed(2);
+//   const hrvMeanDev = +avg(validHrvDev).toFixed(2);
+//   const last3RhrAvg = avg(last3Rhr);
+//   const last3HrvAvg = avg(last3Hrv);
+
+//   return {
+//     rhr_mean_dev: rhrMeanDev,
+//     hrv_mean_dev: hrvMeanDev,
+//     drift_score_avg: +avg(recent.map(r => r.drift_score)).toFixed(2),
+//     days_flagged: recent.reduce((sum, r) => sum + r.drift_score, 0),
+//     rhr_trend: last3RhrAvg > 2 ? 'up' : last3RhrAvg < -2 ? 'down' : 'stable',
+//     hrv_trend: last3HrvAvg < -3 ? 'down' : last3HrvAvg > 3 ? 'up' : 'stable',
+//     window_days: recentWindow,
+//     date_range: `${recent[0].date} to ${recent[recent.length - 1].date}`,
+//   };
+// }
+
 function buildPayload(combined, recentWindow = 14) {
   const recent = combined.slice(-recentWindow);
+  const week1 = recent.slice(0, 7);
+  const week2 = recent.slice(7);
+
   const validRhrDev = recent.map(r => r.rhr_dev).filter(v => v != null);
   const validHrvDev = recent.map(r => r.hrv_dev).filter(v => v != null);
   const last3Rhr = recent.slice(-3).map(r => r.rhr_dev).filter(v => v != null);
   const last3Hrv = recent.slice(-3).map(r => r.hrv_dev).filter(v => v != null);
 
   const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-  const rhrMeanDev = +avg(validRhrDev).toFixed(2);
-  const hrvMeanDev = +avg(validHrvDev).toFixed(2);
-  const last3RhrAvg = avg(last3Rhr);
-  const last3HrvAvg = avg(last3Hrv);
+
+  // week over week
+  const w1AvgRhr = avg(week1.map(r => r.rhr_dev).filter(v => v != null));
+  const w2AvgRhr = avg(week2.map(r => r.rhr_dev).filter(v => v != null));
+  const w1AvgHrv = avg(week1.map(r => r.hrv_dev).filter(v => v != null));
+  const w2AvgHrv = avg(week2.map(r => r.hrv_dev).filter(v => v != null));
+
+  // streak detection — consecutive days at end of window where drift=0
+  let goodStreak = 0;
+  for (let i = recent.length - 1; i >= 0; i--) {
+    if (recent[i].drift_score === 0) goodStreak++;
+    else break;
+  }
+  let badStreak = 0;
+  for (let i = recent.length - 1; i >= 0; i--) {
+    if (recent[i].drift_score > 0) badStreak++;
+    else break;
+  }
+
+  // per-day detail for last 14 days
+  const daily = recent.map(r => ({
+    date: r.date,
+    rhr_dev: r.rhr_dev != null ? +r.rhr_dev.toFixed(1) : null,
+    hrv_dev: r.hrv_dev != null ? +r.hrv_dev.toFixed(1) : null,
+    drift: r.drift_score,
+  }));
 
   return {
-    rhr_mean_dev: rhrMeanDev,
-    hrv_mean_dev: hrvMeanDev,
+    rhr_mean_dev: +avg(validRhrDev).toFixed(2),
+    hrv_mean_dev: +avg(validHrvDev).toFixed(2),
     drift_score_avg: +avg(recent.map(r => r.drift_score)).toFixed(2),
     days_flagged: recent.reduce((sum, r) => sum + r.drift_score, 0),
-    rhr_trend: last3RhrAvg > 2 ? 'up' : last3RhrAvg < -2 ? 'down' : 'stable',
-    hrv_trend: last3HrvAvg < -3 ? 'down' : last3HrvAvg > 3 ? 'up' : 'stable',
+    rhr_trend: last3Rhr.length ? (avg(last3Rhr) > 2 ? 'up' : avg(last3Rhr) < -2 ? 'down' : 'stable') : 'stable',
+    hrv_trend: last3Hrv.length ? (avg(last3Hrv) < -3 ? 'down' : avg(last3Hrv) > 3 ? 'up' : 'stable') : 'stable',
     window_days: recentWindow,
     date_range: `${recent[0].date} to ${recent[recent.length - 1].date}`,
+    // new fields
+    week1_rhr_dev: +w1AvgRhr.toFixed(2),
+    week2_rhr_dev: +w2AvgRhr.toFixed(2),
+    week1_hrv_dev: +w1AvgHrv.toFixed(2),
+    week2_hrv_dev: +w2AvgHrv.toFixed(2),
+    good_streak: goodStreak,
+    bad_streak: badStreak,
+    daily,
   };
 }
 
@@ -689,11 +785,13 @@ async function handleFile(file) {
   try {
     setLoading('Reading your file…', '');
 
-    // 1. Read file as text in browser
-    const xmlText = await readFileAsText(file);
+    // // 1. Read file as text in browser
+    // const xmlText = await readFileAsText(file);
 
     // 2. Parse XML client-side — no memory pressure on server
-    const { rhrRows, hrvRows } = parseHealthXML(xmlText);
+    // const { rhrRows, hrvRows } = parseHealthXML(xmlText);
+    const { rhrRows, hrvRows } = await parseHealthXMLStream(file);
+
 
     if (!rhrRows.length) throw new Error('No resting heart rate data found. Make sure this is an Apple Health export.xml.');
     if (!hrvRows.length) throw new Error('No HRV data found. Make sure your Apple Watch has recorded HRV (SDNN).');
