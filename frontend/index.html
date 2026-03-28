@@ -446,6 +446,11 @@
 
     .timeline-dot:hover .timeline-tooltip { display: block; }
 
+    .timeline-dot.drift-none {
+      background: var(--border2);
+      border: 1px dashed var(--muted);
+    }
+
     .timeline-legend {
       display: flex;
       gap: 16px;
@@ -765,31 +770,6 @@ function computeDrift(combined, rhrThresh = 5, hrvThresh = -10) {
   }));
 }
 
-// function buildPayload(combined, recentWindow = 14) {
-//   const recent = combined.slice(-recentWindow);
-//   const validRhrDev = recent.map(r => r.rhr_dev).filter(v => v != null);
-//   const validHrvDev = recent.map(r => r.hrv_dev).filter(v => v != null);
-//   const last3Rhr = recent.slice(-3).map(r => r.rhr_dev).filter(v => v != null);
-//   const last3Hrv = recent.slice(-3).map(r => r.hrv_dev).filter(v => v != null);
-
-//   const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-//   const rhrMeanDev = +avg(validRhrDev).toFixed(2);
-//   const hrvMeanDev = +avg(validHrvDev).toFixed(2);
-//   const last3RhrAvg = avg(last3Rhr);
-//   const last3HrvAvg = avg(last3Hrv);
-
-//   return {
-//     rhr_mean_dev: rhrMeanDev,
-//     hrv_mean_dev: hrvMeanDev,
-//     drift_score_avg: +avg(recent.map(r => r.drift_score)).toFixed(2),
-//     days_flagged: recent.reduce((sum, r) => sum + r.drift_score, 0),
-//     rhr_trend: last3RhrAvg > 2 ? 'up' : last3RhrAvg < -2 ? 'down' : 'stable',
-//     hrv_trend: last3HrvAvg < -3 ? 'down' : last3HrvAvg > 3 ? 'up' : 'stable',
-//     window_days: recentWindow,
-//     date_range: `${recent[0].date} to ${recent[recent.length - 1].date}`,
-//   };
-// }
-
 function buildPayload(combined, recentWindow = 14) {
   const recent = combined.slice(-recentWindow);
   const week1 = recent.slice(0, 7);
@@ -828,6 +808,16 @@ function buildPayload(combined, recentWindow = 14) {
     drift: r.drift_score,
   }));
 
+  // fill any missing dates in the window so timeline always shows contiguous days
+  const dailyMap = Object.fromEntries(daily.map(d => [d.date, d]));
+  const filled = [];
+  const startDate = new Date(recent[0].date + 'T12:00:00');  // noon to avoid any UTC boundary issues
+  const endDate   = new Date(recent[recent.length - 1].date + 'T12:00:00');
+  for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    filled.push(dailyMap[key] || { date: key, rhr_dev: null, hrv_dev: null, drift: null });
+  }
+
   return {
     rhr_mean_dev: +avg(validRhrDev).toFixed(2),
     hrv_mean_dev: +avg(validHrvDev).toFixed(2),
@@ -837,14 +827,13 @@ function buildPayload(combined, recentWindow = 14) {
     hrv_trend: last3Hrv.length ? (avg(last3Hrv) < -3 ? 'down' : avg(last3Hrv) > 3 ? 'up' : 'stable') : 'stable',
     window_days: recentWindow,
     date_range: `${recent[0].date} to ${recent[recent.length - 1].date}`,
-    // new fields
     week1_rhr_dev: +w1AvgRhr.toFixed(2),
     week2_rhr_dev: +w2AvgRhr.toFixed(2),
     week1_hrv_dev: +w1AvgHrv.toFixed(2),
     week2_hrv_dev: +w2AvgHrv.toFixed(2),
     good_streak: goodStreak,
     bad_streak: badStreak,
-    daily,
+    daily: filled,
   };
 }
 
@@ -1058,16 +1047,18 @@ function showResults(data) {
   dotsEl.innerHTML = '';
   p.daily.forEach(day => {
     const dot = document.createElement('div');
-    dot.className = `timeline-dot drift-${day.drift}`;
+    // dot.className = `timeline-dot drift-${day.drift}`;
+    // // in showResults timeline section
+    dot.className = `timeline-dot ${day.drift === null ? 'drift-none' : 'drift-' + day.drift}`;
 
     const tip = document.createElement('div');
     tip.className = 'timeline-tooltip';
-    tip.innerHTML = `
-      <strong>${day.date}</strong><br>
-      RHR ${day.rhr_dev != null ? (day.rhr_dev >= 0 ? '+' : '') + day.rhr_dev + ' bpm' : '—'}<br>
-      HRV ${day.hrv_dev != null ? (day.hrv_dev >= 0 ? '+' : '') + day.hrv_dev + ' ms' : '—'}<br>
-      drift: ${day.drift}/2
-    `;
+    tip.innerHTML = day.drift === null
+      ? `<strong>${day.date}</strong><br>no data`
+      : `<strong>${day.date}</strong><br>
+        RHR ${day.rhr_dev != null ? (day.rhr_dev >= 0 ? '+' : '') + day.rhr_dev + ' bpm' : '—'}<br>
+        HRV ${day.hrv_dev != null ? (day.hrv_dev >= 0 ? '+' : '') + day.hrv_dev + ' ms' : '—'}<br>
+        drift: ${day.drift}/2`;
     dot.appendChild(tip);
     dotsEl.appendChild(dot);
   });
