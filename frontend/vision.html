@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HealthSync — A Vision</title>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,300;1,9..144,200;1,9..144,300&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #08090b;
+      --bg2: #0d0f12;
+      --text: #e8e4dc;
+      --muted: #3a3a3a;
+      --muted2: #5a5a5a;
+      --accent: #7dd3a8;
+      --accent-dim: rgba(125, 211, 168, 0.12);
+      --accent-dimmer: rgba(125, 211, 168, 0.05);
+      --accent-glow: rgba(125, 211, 168, 0.25);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── heartbeat canvas ── */
+    #hb-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      opacity: 0.045;
+      z-index: 0;
+    }
+
+    /* ── progress bar ── */
+    #progress {
+      position: fixed;
+      top: 0; left: 0;
+      height: 1px;
+      width: 0%;
+      background: var(--accent);
+      z-index: 100;
+      transition: width 0.1s linear;
+    }
+
+    /* ── nav ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 50;
+      padding: 20px 48px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(to bottom, rgba(8,9,11,0.95) 0%, transparent 100%);
+    }
+
+    .nav-logo {
+      font-family: 'Fraunces', serif;
+      font-style: italic;
+      font-weight: 200;
+      font-size: 18px;
+      color: var(--accent);
+      opacity: 0;
+      animation: fadeIn 1s ease forwards 0.3s;
+    }
+
+    .nav-link {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted2);
+      text-decoration: none;
+      transition: color 0.2s;
+      opacity: 0;
+      animation: fadeIn 1s ease forwards 0.5s;
+    }
+    .nav-link:hover { color: var(--accent); }
+
+    /* ── layout ── */
+    .page {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 120px 40px 80px;
+      position: relative;
+    }
+
+    .hero-eyebrow {
+      font-size: 10px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 40px;
+      opacity: 0;
+      animation: fadeUp 0.9s ease forwards 0.4s;
+    }
+
+    .hero-headline {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(48px, 9vw, 96px);
+      font-weight: 200;
+      font-style: italic;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      max-width: 800px;
+      margin-bottom: 40px;
+      opacity: 0;
+      animation: fadeUp 1s ease forwards 0.6s;
+    }
+
+    .hero-headline em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
+    .hero-sub {
+      font-size: 13px;
+      color: var(--muted2);
+      max-width: 440px;
+      line-height: 1.8;
+      margin-bottom: 56px;
+      opacity: 0;
+      animation: fadeUp 0.9s ease forwards 0.9s;
+    }
+
+    .hero-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid rgba(125,211,168,0.3);
+      color: var(--accent);
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 14px 28px;
+      border-radius: 100px;
+      text-decoration: none;
+      transition: background 0.25s, border-color 0.25s, gap 0.25s;
+      opacity: 0;
+      animation: fadeUp 0.9s ease forwards 1.1s;
+    }
+    .hero-cta:hover {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      gap: 16px;
+    }
+
+    .scroll-hint {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      opacity: 0;
+      animation: fadeIn 1s ease forwards 1.8s;
+    }
+
+    .scroll-hint span {
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .scroll-arrow {
+      width: 1px;
+      height: 40px;
+      background: linear-gradient(to bottom, var(--muted), transparent);
+      animation: scrollPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes scrollPulse {
+      0%, 100% { opacity: 0.3; transform: scaleY(0.8); }
+      50% { opacity: 1; transform: scaleY(1); }
+    }
+
+    /* ── CONTENT SECTIONS ── */
+    .content {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 40px;
+    }
+
+    /* ── reveal animation base ── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.9s ease, transform 0.9s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.35s; }
+
+    /* ── section ── */
+    .section {
+      padding: 100px 0;
+      border-top: 1px solid #111316;
+    }
+
+    .section-label {
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .section p {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(18px, 2.5vw, 22px);
+      font-weight: 200;
+      line-height: 1.75;
+      color: var(--text);
+    }
+
+    .section p + p { margin-top: 24px; }
+
+    .highlight { color: var(--accent); font-style: italic; }
+
+    /* ── PULL QUOTE ── */
+    .pull-quote-section {
+      padding: 120px 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pull-quote-section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 60% 60% at 50% 50%, rgba(125,211,168,0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .pull-quote-inner {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 40px;
+      text-align: center;
+    }
+
+    .quote-mark {
+      font-family: 'Fraunces', serif;
+      font-size: 80px;
+      font-weight: 200;
+      color: var(--accent);
+      opacity: 0.3;
+      line-height: 0.5;
+      margin-bottom: 32px;
+      display: block;
+    }
+
+    .pull-quote-text {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(22px, 4vw, 36px);
+      font-weight: 200;
+      font-style: italic;
+      line-height: 1.45;
+      color: var(--text);
+      max-width: 600px;
+      margin: 0 auto 32px;
+    }
+
+    .pull-quote-attr {
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted2);
+    }
+
+    /* ── DATA STRIP ── */
+    .data-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: #111316;
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 64px 0;
+    }
+
+    .data-cell {
+      background: var(--bg2);
+      padding: 32px 28px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .data-cell::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--accent);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.8s ease;
+    }
+
+    .data-cell.visible::after {
+      transform: scaleX(1);
+    }
+
+    .data-cell-label {
+      font-size: 9px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted2);
+      margin-bottom: 12px;
+    }
+
+    .data-cell-value {
+      font-family: 'Fraunces', serif;
+      font-size: 42px;
+      font-weight: 200;
+      color: var(--accent);
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .data-cell-sub {
+      font-size: 10px;
+      color: var(--muted2);
+      line-height: 1.5;
+    }
+
+    /* ── PIPELINE VISUAL ── */
+    .pipeline-section {
+      padding: 100px 0;
+      border-top: 1px solid #111316;
+    }
+
+    .pipeline-label {
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 48px;
+    }
+
+    .pipeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .pipeline-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 24px;
+      padding: 24px 0;
+      border-top: 1px solid #111316;
+      opacity: 0;
+      transform: translateX(-16px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+
+    .pipeline-step.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .pipeline-step:nth-child(1) { transition-delay: 0s; }
+    .pipeline-step:nth-child(2) { transition-delay: 0.12s; }
+    .pipeline-step:nth-child(3) { transition-delay: 0.24s; }
+    .pipeline-step:nth-child(4) { transition-delay: 0.36s; }
+    .pipeline-step:nth-child(5) { transition-delay: 0.48s; }
+
+    .pipeline-num {
+      font-size: 10px;
+      color: var(--accent);
+      opacity: 0.5;
+      min-width: 24px;
+      padding-top: 2px;
+    }
+
+    .pipeline-title {
+      font-family: 'Fraunces', serif;
+      font-size: 17px;
+      font-weight: 300;
+      color: var(--text);
+      min-width: 180px;
+    }
+
+    .pipeline-desc {
+      font-size: 12px;
+      color: var(--muted2);
+      line-height: 1.7;
+      flex: 1;
+    }
+
+    .pipeline-tag {
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      border: 1px solid rgba(125,211,168,0.2);
+      padding: 3px 10px;
+      border-radius: 100px;
+      white-space: nowrap;
+      align-self: center;
+    }
+
+    /* ── DRIFT DEMO ── */
+    .demo-section {
+      padding: 100px 0;
+      border-top: 1px solid #111316;
+    }
+
+    .demo-label {
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .demo-headline {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(20px, 3vw, 28px);
+      font-weight: 200;
+      line-height: 1.5;
+      margin-bottom: 48px;
+      max-width: 480px;
+    }
+
+    .demo-dots-wrap {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .demo-dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      opacity: 0;
+      transform: scale(0.4);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+
+    .demo-dot.show { opacity: 1; transform: scale(1); }
+    .demo-dot.d0 { background: var(--accent); }
+    .demo-dot.d1 { background: #f0c080; }
+    .demo-dot.d2 { background: #f08080; }
+
+    .demo-legend {
+      display: flex;
+      gap: 20px;
+      font-size: 10px;
+      color: var(--muted2);
+      margin-top: 16px;
+    }
+
+    .legend-pip {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+
+    .demo-insight {
+      margin-top: 40px;
+      padding: 24px 28px;
+      background: var(--bg2);
+      border: 1px solid #1a1d22;
+      border-left: 2px solid var(--accent);
+      border-radius: 0 10px 10px 0;
+      font-family: 'Fraunces', serif;
+      font-size: 16px;
+      font-weight: 200;
+      line-height: 1.75;
+      color: var(--text);
+      opacity: 0;
+      transition: opacity 1s ease 0.5s;
+      min-height: 80px;
+    }
+
+    .demo-insight.show { opacity: 1; }
+
+    .demo-insight-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    /* ── FINAL CTA ── */
+    .final-section {
+      padding: 140px 0 120px;
+      text-align: center;
+      border-top: 1px solid #111316;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .final-section::before {
+      content: '';
+      position: absolute;
+      bottom: -100px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 400px;
+      background: radial-gradient(ellipse, rgba(125,211,168,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .final-headline {
+      font-family: 'Fraunces', serif;
+      font-size: clamp(32px, 6vw, 60px);
+      font-weight: 200;
+      font-style: italic;
+      line-height: 1.1;
+      margin-bottom: 32px;
+    }
+
+    .final-headline em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
+    .final-sub {
+      font-size: 12px;
+      color: var(--muted2);
+      margin-bottom: 48px;
+      line-height: 1.8;
+    }
+
+    .final-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--accent);
+      color: #08090b;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 16px 36px;
+      border-radius: 100px;
+      text-decoration: none;
+      transition: background 0.2s, gap 0.2s, box-shadow 0.2s;
+    }
+
+    .final-cta:hover {
+      background: #a8e8c0;
+      gap: 16px;
+      box-shadow: 0 0 40px rgba(125,211,168,0.3);
+    }
+
+    /* ── footer ── */
+    footer {
+      padding: 32px 48px;
+      border-top: 1px solid #111316;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .footer-logo {
+      font-family: 'Fraunces', serif;
+      font-style: italic;
+      font-weight: 200;
+      font-size: 16px;
+      color: var(--accent);
+    }
+
+    .footer-note {
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+
+    /* ── animations ── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="progress"></div>
+<canvas id="hb-canvas"></canvas>
+
+<nav>
+  <span class="nav-logo">HealthSync</span>
+  <a href="https://healthsync-p1ai.onrender.com" class="nav-link">Try it →</a>
+</nav>
+
+<div class="page">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-eyebrow">HealthSync — A Vision</div>
+    <h1 class="hero-headline">
+      Healthcare is episodic.<br>
+      <em>Your body isn't.</em>
+    </h1>
+    <p class="hero-sub">
+      Every day your Apple Watch records data that could change how you understand your health.
+      Almost none of it is ever read.
+    </p>
+    <a href="https://healthsync-p1ai.onrender.com" class="hero-cta">
+      See your own data →
+    </a>
+    <div class="scroll-hint">
+      <span>scroll</span>
+      <div class="scroll-arrow"></div>
+    </div>
+  </section>
+
+  <!-- THE GAP -->
+  <div class="content">
+    <section class="section">
+      <div class="section-label reveal">The gap</div>
+      <p class="reveal reveal-delay-1">
+        The data from wearables is continuous, personal, and almost entirely unread.
+        Every morning your Apple Watch records your resting heart rate.
+        Every night, your HRV. Day after day, year after year —
+        a <span class="highlight">longitudinal</span> record of your cardiovascular health that sits on your phone,
+        <span class="highlight">invisible to everyone including you.</span>
+      </p>
+    </section>
+  </div>
+
+  <!-- PULL QUOTE -->
+  <section class="pull-quote-section">
+    <div class="pull-quote-inner">
+      <span class="quote-mark reveal">"</span>
+      <p class="pull-quote-text reveal reveal-delay-1">
+        Imagine spending 40+ hours in a silent cardiac event before anyone knew.
+        The data that could have flagged it existed.
+        It just wasn't being watched.
+      </p>
+      <p class="pull-quote-attr reveal reveal-delay-2">The space between appointments</p>
+    </div>
+  </section>
+
+  <!-- WHAT AI CHANGES -->
+  <div class="content">
+    <section class="section">
+      <div class="section-label reveal">What AI changes</div>
+      <p class="reveal reveal-delay-1">
+        AI doesn't replace the cardiologist. It makes the space
+        <span class="highlight">between appointments visible</span> for the first time.
+      </p>
+      <p class="reveal reveal-delay-2">
+        What used to require a clinical team — continuous monitoring,
+        personal baseline modeling, anomaly detection, plain-English explanation —
+        can now run in a browser, in seconds, on data you already have.
+        The intelligence is no longer locked behind a clinic visit.
+      </p>
+    </section>
+
+    <!-- DATA STRIP -->
+    <div class="data-strip">
+      <div class="data-cell" data-count="30" data-suffix="d">
+        <div class="data-cell-label">Detection window</div>
+        <div class="data-cell-value">—</div>
+        <div class="data-cell-sub">rolling personal baseline</div>
+      </div>
+      <div class="data-cell" data-count="8" data-suffix="">
+        <div class="data-cell-label">Numbers sent to server</div>
+        <div class="data-cell-value">—</div>
+        <div class="data-cell-sub">not your raw data</div>
+      </div>
+      <div class="data-cell" data-count="365" data-suffix="d">
+        <div class="data-cell-label">Days of data vs</div>
+        <div class="data-cell-value">—</div>
+        <div class="data-cell-sub">1–2 clinical visits / year</div>
+      </div>
+    </div>
+
+    <!-- HOW IT WORKS -->
+    <section class="pipeline-section">
+      <div class="pipeline-label">How it works</div>
+      <div class="pipeline">
+        <div class="pipeline-step">
+          <span class="pipeline-num">01</span>
+          <span class="pipeline-title">Export from Apple Health</span>
+          <span class="pipeline-desc">One tap on your iPhone exports your full health history as XML.</span>
+          <span class="pipeline-tag">on device</span>
+        </div>
+        <div class="pipeline-step">
+          <span class="pipeline-num">02</span>
+          <span class="pipeline-title">Parse in your browser</span>
+          <span class="pipeline-desc">Your raw data never leaves your device. All XML parsing runs locally.</span>
+          <span class="pipeline-tag">privacy-first</span>
+        </div>
+        <div class="pipeline-step">
+          <span class="pipeline-num">03</span>
+          <span class="pipeline-title">Baseline modeling</span>
+          <span class="pipeline-desc">A 30-day rolling personal baseline is computed for RHR and HRV.</span>
+          <span class="pipeline-tag">local compute</span>
+        </div>
+        <div class="pipeline-step">
+          <span class="pipeline-num">04</span>
+          <span class="pipeline-title">Drift detection</span>
+          <span class="pipeline-desc">Each day is scored against your baseline. Sustained deviations are flagged.</span>
+          <span class="pipeline-tag">local compute</span>
+        </div>
+        <div class="pipeline-step">
+          <span class="pipeline-num">05</span>
+          <span class="pipeline-title">AI insight</span>
+          <span class="pipeline-desc">8 numbers are sent to Claude. A plain-English weekly summary is returned.</span>
+          <span class="pipeline-tag">claude ai</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- DRIFT DEMO -->
+    <section class="demo-section">
+      <div class="demo-label reveal">What you see</div>
+      <h2 class="demo-headline reveal reveal-delay-1">
+        A 14-day drift timeline.<br>Every dot is a day.
+      </h2>
+
+      <div class="demo-dots-wrap" id="demo-dots"></div>
+
+      <div class="demo-legend">
+        <span><span class="legend-pip" style="background:var(--accent)"></span>baseline</span>
+        <span><span class="legend-pip" style="background:#f0c080"></span>1 metric flagged</span>
+        <span><span class="legend-pip" style="background:#f08080"></span>both flagged</span>
+      </div>
+
+      <div class="demo-insight" id="demo-insight">
+        <span class="demo-insight-label">AI weekly insight</span>
+        <span id="demo-insight-text"></span>
+      </div>
+    </section>
+
+    <!-- FINAL SECTION -->
+    <section class="final-section">
+      <h2 class="final-headline reveal">
+        Your data is already there.<br>
+        <em>Start reading it.</em>
+      </h2>
+      <p class="final-sub reveal reveal-delay-1">
+        No account. No subscription. Upload your Apple Health export<br>and see your cardiovascular baseline in under a minute.
+      </p>
+      <a href="https://healthsync-p1ai.onrender.com" class="final-cta reveal reveal-delay-2">
+        Try HealthSync →
+      </a>
+    </section>
+  </div>
+
+</div>
+
+<footer>
+  <span class="footer-logo">HealthSync</span>
+  <span class="footer-note">For self-awareness only. Not a medical device. Does not diagnose or predict medical events.</span>
+</footer>
+
+<script>
+// ── heartbeat canvas ──
+const canvas = document.getElementById('hb-canvas');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+function drawHeartbeat() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#7dd3a8';
+  ctx.lineWidth = 1.2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const rows = Math.ceil(canvas.height / 110);
+  for (let row = 0; row < rows; row++) {
+    const y = row * 110 + 55;
+    const offset = (Date.now() / 18 + row * 180) % canvas.width;
+
+    ctx.beginPath();
+    let x = -offset;
+    ctx.moveTo(x, y);
+    while (x < canvas.width + 200) {
+      ctx.lineTo(x + 55, y);
+      ctx.lineTo(x + 65, y - 6);
+      ctx.lineTo(x + 73, y + 16);
+      ctx.lineTo(x + 82, y - 36);
+      ctx.lineTo(x + 91, y + 10);
+      ctx.lineTo(x + 101, y - 5);
+      ctx.lineTo(x + 118, y);
+      x += 190;
+    }
+    ctx.stroke();
+  }
+  requestAnimationFrame(drawHeartbeat);
+}
+drawHeartbeat();
+
+// ── scroll progress ──
+const progressBar = document.getElementById('progress');
+window.addEventListener('scroll', () => {
+  const pct = window.scrollY / (document.body.scrollHeight - window.innerHeight) * 100;
+  progressBar.style.width = pct + '%';
+});
+
+// ── IntersectionObserver for reveal ──
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.15 });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ── data cell counting animation ──
+const cellObserver = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (!e.isIntersecting) return;
+    const cell = e.target;
+    cell.classList.add('visible');
+    const target = parseInt(cell.dataset.count);
+    const suffix = cell.dataset.suffix || '';
+    const valueEl = cell.querySelector('.data-cell-value');
+    const duration = 1200;
+    const start = performance.now();
+
+    function tick(now) {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = Math.round(eased * target);
+      valueEl.textContent = current + suffix;
+      if (progress < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+    cellObserver.unobserve(cell);
+  });
+}, { threshold: 0.3 });
+
+document.querySelectorAll('.data-cell').forEach(el => cellObserver.observe(el));
+
+// ── pipeline steps ──
+const pipeObserver = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      pipeObserver.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.2 });
+
+document.querySelectorAll('.pipeline-step').forEach(el => pipeObserver.observe(el));
+
+// ── demo dots animation ──
+const demoPattern = [0,0,0,1,0,0,2,1,0,0,0,0,0,0];
+const demoInsightText = `You've been on a 7-day clean streak with zero drift flags. Your RHR is running 2.1 bpm below your 30-day baseline and HRV is elevated at +4.2 ms — your cardiovascular system is in a strong recovery state. Maintain your current routine; this is not a window to push harder.`;
+
+const dotsContainer = document.getElementById('demo-dots');
+const insightEl = document.getElementById('demo-insight');
+const insightTextEl = document.getElementById('demo-insight-text');
+
+// build dots
+demoPattern.forEach((d, i) => {
+  const dot = document.createElement('div');
+  dot.className = `demo-dot d${d}`;
+  dot.dataset.index = i;
+  dotsContainer.appendChild(dot);
+});
+
+let demoTriggered = false;
+const demoObserver = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting && !demoTriggered) {
+      demoTriggered = true;
+      animateDots();
+      demoObserver.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.4 });
+
+demoObserver.observe(dotsContainer);
+
+function animateDots() {
+  const dots = dotsContainer.querySelectorAll('.demo-dot');
+  dots.forEach((dot, i) => {
+    setTimeout(() => {
+      dot.classList.add('show');
+      if (i === dots.length - 1) {
+        // after all dots, show insight and type it
+        setTimeout(() => {
+          insightEl.classList.add('show');
+          typeText(insightTextEl, demoInsightText, 18);
+        }, 300);
+      }
+    }, i * 80);
+  });
+}
+
+function typeText(el, text, speed) {
+  let i = 0;
+  function tick() {
+    if (i < text.length) {
+      el.textContent += text[i++];
+      setTimeout(tick, speed);
+    }
+  }
+  tick();
+}
+</script>
+</body>
+</html>
