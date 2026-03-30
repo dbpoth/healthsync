@@ -43,6 +43,7 @@
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: baseline;
+      flex-wrap: wrap;
       gap: 20px;
     }
 
@@ -60,6 +61,25 @@
       color: var(--muted);
       letter-spacing: 0.12em;
       text-transform: uppercase;
+    }
+
+    /* Text CTA — tagline scale, no pill */
+    .header-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      color: var(--accent2);
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      text-decoration: none;
+      transition: color 0.2s, gap 0.25s;
+    }
+    .header-cta:hover {
+      color: var(--accent);
+      gap: 12px;
     }
 
     .disclaimer {
@@ -474,6 +494,7 @@
   <header>
     <span class="logo">HealthSync</span>
     <span class="tagline">Longitudinal heart health intelligence</span>
+    <a href="/vision.html" class="header-cta">Read our vision →</a>
     <span class="disclaimer">For self-awareness only. Not a medical device. Does not diagnose or predict medical events.</span>
   </header>
 

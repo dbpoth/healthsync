@@ -4,16 +4,22 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>HealthSync — A Vision</title>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,200;0,9..144,300;1,9..144,200;1,9..144,300&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #08090b;
+      --bg: #0a0c0f;
       --bg2: #0d0f12;
+      --border: rgba(255,255,255,0.07);
+      --border2: rgba(255,255,255,0.13);
       --text: #e8e4dc;
-      --muted: #3a3a3a;
+      --muted: #6b7280;
       --muted2: #5a5a5a;
+      --logo-color: #c8f0d8;
+      --accent2: #7dd3a8;
       --accent: #7dd3a8;
       --accent-dim: rgba(125, 211, 168, 0.12);
       --accent-dimmer: rgba(125, 211, 168, 0.05);
@@ -38,7 +44,7 @@
       top: 0; left: 0;
       width: 100%; height: 100%;
       pointer-events: none;
-      opacity: 0.045;
+      opacity: 0.08;
       z-index: 0;
     }
 
@@ -53,39 +59,71 @@
       transition: width 0.1s linear;
     }
 
-    /* ── nav ── */
-    nav {
-      position: fixed;
-      top: 0; left: 0; right: 0;
+    /* ── header (matches index.html) ── */
+    header {
+      position: relative;
       z-index: 50;
-      padding: 20px 48px;
+      padding: 28px 48px 24px;
+      border-bottom: 1px solid var(--border);
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: linear-gradient(to bottom, rgba(8,9,11,0.95) 0%, transparent 100%);
+      align-items: baseline;
+      gap: 20px;
     }
 
-    .nav-logo {
+    .logo {
       font-family: 'Fraunces', serif;
+      font-size: 22px;
+      font-weight: 300;
       font-style: italic;
-      font-weight: 200;
-      font-size: 18px;
-      color: var(--accent);
-      opacity: 0;
-      animation: fadeIn 1s ease forwards 0.3s;
+      letter-spacing: -0.02em;
+      color: var(--logo-color);
+      text-decoration: none;
+    }
+    .logo:hover { opacity: 0.92; }
+
+    .tagline {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
     }
 
-    .nav-link {
-      font-size: 10px;
-      letter-spacing: 0.14em;
+    .header-nav {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.12em;
       text-transform: uppercase;
-      color: var(--muted2);
       text-decoration: none;
       transition: color 0.2s;
-      opacity: 0;
-      animation: fadeIn 1s ease forwards 0.5s;
     }
-    .nav-link:hover { color: var(--accent); }
+    .header-nav:hover { color: var(--accent2); }
+
+    .header-nav-active {
+      color: var(--accent2);
+      font-weight: 500;
+    }
+
+    .header-try {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid rgba(125, 211, 168, 0.3);
+      color: var(--accent2);
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 8px 20px;
+      border-radius: 100px;
+      text-decoration: none;
+      transition: background 0.25s, border-color 0.25s, gap 0.25s;
+    }
+    .header-try:hover {
+      background: var(--accent-dim);
+      border-color: var(--accent2);
+      gap: 12px;
+    }
 
     /* ── layout ── */
     .page {
@@ -101,7 +139,7 @@
       justify-content: center;
       align-items: center;
       text-align: center;
-      padding: 120px 40px 80px;
+      padding: 48px 40px 80px;
       position: relative;
     }
 
@@ -595,11 +633,15 @@
 
     .footer-logo {
       font-family: 'Fraunces', serif;
+      font-size: 20px;
+      font-weight: 300;
       font-style: italic;
-      font-weight: 200;
-      font-size: 16px;
-      color: var(--accent);
+      letter-spacing: -0.02em;
+      color: var(--logo-color);
+      text-decoration: none;
     }
+
+    .footer-logo:hover { opacity: 0.92; }
 
     .footer-note {
       font-size: 10px;
@@ -624,10 +666,12 @@
 <div id="progress"></div>
 <canvas id="hb-canvas"></canvas>
 
-<nav>
-  <span class="nav-logo">HealthSync</span>
-  <a href="https://healthsync-p1ai.onrender.com" class="nav-link">Try it →</a>
-</nav>
+<header>
+  <a href="https://healthsync-p1ai.onrender.com" class="logo">HealthSync</a>
+  <span class="tagline">Longitudinal heart health intelligence</span>
+  <span class="header-nav header-nav-active" aria-current="page">Our vision</span>
+  <a href="https://healthsync-p1ai.onrender.com" class="header-try">Try it →</a>
+</header>
 
 <div class="page">
 
@@ -789,7 +833,7 @@
 </div>
 
 <footer>
-  <span class="footer-logo">HealthSync</span>
+  <a href="https://healthsync-p1ai.onrender.com" class="footer-logo">HealthSync</a>
   <span class="footer-note">For self-awareness only. Not a medical device. Does not diagnose or predict medical events.</span>
 </footer>
 
@@ -809,6 +853,8 @@ function drawHeartbeat() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = '#7dd3a8';
   ctx.lineWidth = 1.2;
+  ctx.shadowColor = 'rgba(125, 211, 168, 0.2)';
+  ctx.shadowBlur = 5;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
