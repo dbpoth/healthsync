@@ -2,3 +2,4 @@ data/*.xml
 .DS_Store
 __pycache__/
 *.pyc
+demos/
