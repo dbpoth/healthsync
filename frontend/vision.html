@@ -788,8 +788,8 @@
         <div class="pipeline-step">
           <span class="pipeline-num">05</span>
           <span class="pipeline-title">AI insight</span>
-          <span class="pipeline-desc">8 numbers are sent to Claude. A plain-English weekly summary is returned.</span>
-          <span class="pipeline-tag">claude ai</span>
+          <span class="pipeline-desc">8 numbers are sent to an LLM. A plain-English weekly summary is returned.</span>
+          <span class="pipeline-tag">LLM insight</span>
         </div>
       </div>
     </section>
@@ -941,7 +941,7 @@ document.querySelectorAll('.pipeline-step').forEach(el => pipeObserver.observe(e
 
 // ── demo dots animation ──
 const demoPattern = [0,0,0,1,0,0,2,1,0,0,0,0,0,0];
-const demoInsightText = `You've been on a 7-day clean streak with zero drift flags. Your RHR is running 2.1 bpm below your 30-day baseline and HRV is elevated at +4.2 ms — your cardiovascular system is in a strong recovery state. Maintain your current routine; this is not a window to push harder.`;
+const demoInsightText = `You've been on a 14-day clean streak with zero drift flags. Your RHR is running 2.1 bpm below your 30-day baseline and HRV is elevated at +4.2 ms — your cardiovascular system is in a strong recovery state. Maintain your current routine; you're getting enough sleep and stress is under control.`;
 
 const dotsContainer = document.getElementById('demo-dots');
 const insightEl = document.getElementById('demo-insight');
